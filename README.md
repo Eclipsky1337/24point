@@ -51,6 +51,7 @@ python scripts/prepare_data.py --train-limit 8 --eval-limit 8 --out-dir data/pro
 ```bash
 accelerate launch scripts/train_grpo.py \
   --model_name Qwen/Qwen2.5-1.5B-Instruct \
+  --train_file data/processed/train_nlile_solvable.jsonl \
   --output_dir outputs/qwen2.5-1.5b-24point-grpo \
   --max_steps 800 \
   --per_device_train_batch_size 1 \
@@ -74,6 +75,8 @@ python scripts/evaluate.py \
   --split hard \
   --limit 100
 ```
+
+如果训练阶段再次遇到 Hugging Face dataset cache 报错，确认先执行过 `scripts/prepare_data.py`，并在训练命令里保留 `--train_file data/processed/train_nlile_solvable.jsonl`。这样训练会直接读取本地 JSONL，不再重新解析远端数据集缓存。
 
 ## 项目结构
 

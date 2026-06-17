@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
 
-from datasets import load_from_disk
+from datasets import load_dataset, load_from_disk
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
@@ -14,6 +15,11 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", default="Qwen/Qwen2.5-1.5B-Instruct")
     parser.add_argument("--dataset_path", default=None, help="Optional load_from_disk dataset path.")
+    parser.add_argument(
+        "--train_file",
+        default="data/processed/train_nlile_solvable.jsonl",
+        help="Local JSONL training file created by scripts/prepare_data.py.",
+    )
     parser.add_argument("--output_dir", default="outputs/qwen2.5-1.5b-24point-grpo")
     parser.add_argument("--max_steps", type=int, default=800)
     parser.add_argument("--learning_rate", type=float, default=5e-6)
@@ -38,7 +44,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    dataset = load_from_disk(args.dataset_path) if args.dataset_path else load_nlile_24game(limit=args.train_limit)
+    if args.dataset_path:
+        dataset = load_from_disk(args.dataset_path)
+    elif args.train_file and Path(args.train_file).exists():
+        dataset = load_dataset("json", data_files=args.train_file, split="train")
+        if args.train_limit:
+            dataset = dataset.select(range(min(args.train_limit, len(dataset))))
+    else:
+        dataset = load_nlile_24game(limit=args.train_limit)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -99,4 +112,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
