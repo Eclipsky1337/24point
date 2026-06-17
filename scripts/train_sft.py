@@ -4,7 +4,8 @@ import argparse
 
 import torch
 from datasets import load_dataset
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from torch.utils.data import DataLoader
+from transformers import AutoModelForCausalLM, AutoTokenizer, default_data_collator
 
 
 def parse_args() -> argparse.Namespace:
@@ -19,6 +20,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gradient_accumulation_steps", type=int, default=8)
     parser.add_argument("--logging_steps", type=int, default=10)
     parser.add_argument("--save_steps", type=int, default=200)
+    parser.add_argument("--max_grad_norm", type=float, default=1.0)
     parser.add_argument("--fp16", action="store_true")
     parser.add_argument("--use_peft", action="store_true")
     parser.add_argument("--lora_r", type=int, default=8)
@@ -73,24 +75,71 @@ def main() -> None:
         return full
 
     tokenized = dataset.map(tokenize, remove_columns=dataset.column_names)
-    training_args = TrainingArguments(
-        output_dir=args.output_dir,
-        num_train_epochs=args.num_train_epochs,
-        learning_rate=args.learning_rate,
-        per_device_train_batch_size=args.per_device_train_batch_size,
-        gradient_accumulation_steps=args.gradient_accumulation_steps,
-        logging_steps=args.logging_steps,
-        save_steps=args.save_steps,
-        fp16=args.fp16,
-        report_to=args.report_to,
-        remove_unused_columns=False,
+    first = tokenized[0]
+    supervised_tokens = sum(1 for label in first["labels"] if label != -100)
+    print(f"first sample supervised tokens: {supervised_tokens}")
+    if supervised_tokens == 0:
+        raise RuntimeError("No supervised tokens found. Increase --max_length or check SFT data.")
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.train()
+
+    dataloader = DataLoader(
+        tokenized,
+        batch_size=args.per_device_train_batch_size,
+        shuffle=True,
+        collate_fn=default_data_collator,
     )
-    trainer = Trainer(model=model, args=training_args, train_dataset=tokenized, tokenizer=tokenizer)
-    trainer.train()
-    trainer.save_model(args.output_dir)
+    optimizer = torch.optim.AdamW((p for p in model.parameters() if p.requires_grad), lr=args.learning_rate)
+    scaler = torch.cuda.amp.GradScaler(enabled=args.fp16 and device.type == "cuda")
+
+    global_step = 0
+    running_loss = 0.0
+    total_steps = int((len(dataloader) * args.num_train_epochs) / max(args.gradient_accumulation_steps, 1))
+    optimizer.zero_grad(set_to_none=True)
+
+    for epoch in range(int(args.num_train_epochs)):
+        for micro_step, batch in enumerate(dataloader, start=1):
+            batch = {key: value.to(device) for key, value in batch.items()}
+            with torch.cuda.amp.autocast(enabled=args.fp16 and device.type == "cuda"):
+                outputs = model(**batch)
+                loss = outputs.loss / args.gradient_accumulation_steps
+            if not torch.isfinite(loss.detach()):
+                raise RuntimeError(f"Non-finite loss at step {global_step}: {loss.detach().item()}")
+
+            scaler.scale(loss).backward()
+            running_loss += loss.detach().float().item()
+
+            if micro_step % args.gradient_accumulation_steps == 0:
+                scaler.unscale_(optimizer)
+                grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                scaler.step(optimizer)
+                scaler.update()
+                optimizer.zero_grad(set_to_none=True)
+                global_step += 1
+
+                if global_step % args.logging_steps == 0 or global_step == 1:
+                    avg_loss = running_loss / args.logging_steps if global_step % args.logging_steps == 0 else running_loss
+                    print(
+                        {
+                            "step": global_step,
+                            "total_steps": total_steps,
+                            "loss": round(avg_loss, 6),
+                            "grad_norm": float(grad_norm),
+                            "epoch": epoch + micro_step / len(dataloader),
+                        },
+                        flush=True,
+                    )
+                    running_loss = 0.0
+
+                if args.save_steps > 0 and global_step % args.save_steps == 0:
+                    model.save_pretrained(args.output_dir)
+                    tokenizer.save_pretrained(args.output_dir)
+
+    model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
 
 
 if __name__ == "__main__":
     main()
-
