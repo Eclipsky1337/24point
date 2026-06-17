@@ -40,6 +40,7 @@ def main() -> None:
         torch_dtype=torch.float16 if args.fp16 else None,
         trust_remote_code=True,
     )
+    model.config.use_cache = False
 
     if args.use_peft:
         from peft import LoraConfig, get_peft_model

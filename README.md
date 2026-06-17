@@ -89,12 +89,13 @@ python scripts/train_sft.py \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 8 \
   --learning_rate 2e-5 \
-  --fp16 \
   --use_peft \
   --lora_r 8 \
   --lora_alpha 16 \
   --report_to none
 ```
+
+P100 上 SFT 如果第一步出现 `Non-finite loss ... nan`，不要加 `--fp16`；用 fp32 做 SFT warmup 更稳。GRPO 阶段可以继续使用 `--fp16` 节省显存。
 
 然后把 GRPO 的 `--model_name` 改成 SFT 输出目录：
 
