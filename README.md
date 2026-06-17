@@ -34,6 +34,15 @@ python -m pip install -r requirements.txt
 python -m pip install --force-reinstall -r requirements.txt
 ```
 
+如果平台 GPU 驱动较旧，例如 `nvidia-smi` 显示 `Driver Version: 470.xx / CUDA Version: 11.4`，需要使用 CUDA 11.x 版 PyTorch：
+
+```bash
+python -m pip uninstall -y torch torchvision torchaudio
+python -m pip install torch==1.12.1+cu113 torchvision==0.13.1+cu113 torchaudio==0.12.1 \
+  --extra-index-url https://download.pytorch.org/whl/cu113
+python -m pip install "numpy<2"
+```
+
 先跑本地逻辑测试：
 
 ```bash
