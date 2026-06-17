@@ -28,6 +28,12 @@ python -m pip install -r requirements.txt
 
 `requirements.txt` 会以 editable 模式安装本项目，因此后续脚本可以直接导入 `twentyfour` 包。
 
+如果云端 PyTorch 镜像是 `PyTorch-2.1.0`，不要安装最新版 `transformers/trl/peft`。本项目已固定一组兼容 PyTorch 2.1 的版本；如果之前已经装过最新版，执行：
+
+```bash
+python -m pip install --force-reinstall -r requirements.txt
+```
+
 先跑本地逻辑测试：
 
 ```bash
