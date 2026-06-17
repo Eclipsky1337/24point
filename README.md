@@ -26,6 +26,8 @@ python -m pip install -U pip
 python -m pip install -r requirements.txt
 ```
 
+`requirements.txt` 会以 editable 模式安装本项目，因此后续脚本可以直接导入 `twentyfour` 包。
+
 先跑本地逻辑测试：
 
 ```bash
@@ -120,4 +122,3 @@ git branch -M main
 git remote add origin <your-github-repo-url>
 git push -u origin main
 ```
-
