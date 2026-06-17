@@ -76,6 +76,46 @@ accelerate launch scripts/train_grpo.py \
   --bf16
 ```
 
+如果纯 GRPO 训练长期出现 `loss: 0.0`、`grad_norm: nan`、`kl: nan` 且正确率奖励一直为 0，先做 SFT warmup：
+
+```bash
+python scripts/build_sft_data.py --out-file data/processed/sft_train.jsonl
+
+python scripts/train_sft.py \
+  --model_name models/Qwen2.5-1.5B-Instruct \
+  --train_file data/processed/sft_train.jsonl \
+  --output_dir outputs/qwen2.5-1.5b-24point-sft \
+  --num_train_epochs 1 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 8 \
+  --learning_rate 2e-5 \
+  --fp16 \
+  --use_peft \
+  --lora_r 8 \
+  --lora_alpha 16 \
+  --report_to none
+```
+
+然后把 GRPO 的 `--model_name` 改成 SFT 输出目录：
+
+```bash
+accelerate launch scripts/train_grpo.py \
+  --model_name outputs/qwen2.5-1.5b-24point-sft \
+  --train_file data/processed/train_nlile_solvable.jsonl \
+  --output_dir outputs/qwen2.5-1.5b-24point-grpo \
+  --max_steps 800 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 1 \
+  --num_generations 2 \
+  --max_completion_length 128 \
+  --learning_rate 5e-6 \
+  --fp16 \
+  --use_peft \
+  --lora_r 8 \
+  --lora_alpha 16 \
+  --report_to none
+```
+
 显存紧张时可加：
 
 ```bash
