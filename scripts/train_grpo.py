@@ -64,7 +64,10 @@ def main() -> None:
         device_map=None,
     )
     if args.gradient_checkpointing:
+        model.config.use_cache = False
         model.gradient_checkpointing_enable()
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
 
     peft_config = None
     if args.use_peft:
