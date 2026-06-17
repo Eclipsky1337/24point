@@ -49,8 +49,13 @@ def normalize_24game_example(example: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def load_nlile_24game(split: str = "train", solvable_only: bool = True, limit: int | None = None) -> Dataset:
-    dataset = load_dataset("nlile/24-game", split=split)
+def load_nlile_24game(
+    split: str = "train",
+    solvable_only: bool = True,
+    limit: int | None = None,
+    download_mode: str | None = None,
+) -> Dataset:
+    dataset = load_dataset("nlile/24-game", split=split, download_mode=download_mode)
     dataset = dataset.map(normalize_24game_example, remove_columns=dataset.column_names)
     if solvable_only:
         dataset = dataset.filter(lambda row: row["solvable"])
@@ -59,8 +64,13 @@ def load_nlile_24game(split: str = "train", solvable_only: bool = True, limit: i
     return dataset
 
 
-def load_game_of_24(split: str = "train", mode: str = "all", limit: int | None = None) -> Dataset:
-    dataset = load_dataset("test-time-compute/game-of-24", split=split)
+def load_game_of_24(
+    split: str = "train",
+    mode: str = "all",
+    limit: int | None = None,
+    download_mode: str | None = None,
+) -> Dataset:
+    dataset = load_dataset("test-time-compute/game-of-24", split=split, download_mode=download_mode)
     dataset = dataset.map(normalize_24game_example, remove_columns=dataset.column_names)
     if mode == "hard":
         start, end = 900, min(1000, len(dataset))

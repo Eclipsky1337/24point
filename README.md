@@ -55,6 +55,12 @@ python -m pytest -q
 python scripts/prepare_data.py --train-limit 8 --eval-limit 8 --out-dir data/processed
 ```
 
+如果 Hugging Face 数据集缓存报 `TypeError: must be called with a dataclass type or instance`，说明缓存版本不兼容，强制重新下载：
+
+```bash
+python scripts/prepare_data.py --out-dir data/processed --force-download
+```
+
 启动 GRPO 训练：
 
 ```bash
