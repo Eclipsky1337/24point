@@ -132,6 +132,17 @@ python scripts/evaluate.py \
   --limit 100
 ```
 
+使用本地 hard split 做 best-of-N 评测：
+
+```bash
+python scripts/evaluate.py \
+  --model_path outputs/qwen2.5-1.5b-24point-grpo-shaped \
+  --eval_file data/processed/eval_game_of_24_hard.jsonl \
+  --limit 100 \
+  --num_samples 8 \
+  --max_new_tokens 128
+```
+
 如果训练阶段再次遇到 Hugging Face dataset cache 报错，确认先执行过 `scripts/prepare_data.py`，并在训练命令里保留 `--train_file data/processed/train_nlile_solvable.jsonl`。这样训练会直接读取本地 JSONL，不再重新解析远端数据集缓存。
 
 ## 项目结构
