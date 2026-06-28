@@ -41,6 +41,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--report_to", default="wandb")
+    parser.add_argument(
+        "--no_chat_template",
+        action="store_true",
+        help="Keep string prompts instead of conversational prompts that trigger tokenizer chat templates.",
+    )
     return parser.parse_args()
 
 
@@ -55,6 +60,12 @@ def main() -> None:
             dataset = dataset.select(range(min(args.train_limit, len(dataset))))
     else:
         dataset = load_nlile_24game(limit=args.train_limit)
+
+    if not args.no_chat_template:
+        dataset = dataset.map(
+            lambda row: {"prompt": [{"role": "user", "content": row["prompt"]}]},
+            load_from_cache_file=False,
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:

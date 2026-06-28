@@ -15,16 +15,22 @@ def _normalize_numbers(value) -> list[int]:
     return [int(x) for x in value]
 
 
+def _completion_text(completion) -> str:
+    if isinstance(completion, list):
+        return "".join(str(message.get("content", "")) for message in completion if isinstance(message, dict))
+    return completion or ""
+
+
 def answer_format_reward(completions, **kwargs) -> list[float]:
-    return [0.5 if STRICT_R1_RE.fullmatch(text or "") else -1.0 for text in completions]
+    return [0.1 if STRICT_R1_RE.fullmatch(_completion_text(text)) else -0.1 for text in completions]
 
 
 def valid_expression_reward(completions, numbers=None, nums=None, **kwargs) -> list[float]:
     batch_numbers = numbers if numbers is not None else nums
     rewards = []
     for text, item_numbers in zip(completions, batch_numbers):
-        result = verify_expression(extract_answer(text), _normalize_numbers(item_numbers))
-        rewards.append(0.2 if result.value is not None else -1.0)
+        result = verify_expression(extract_answer(_completion_text(text)), _normalize_numbers(item_numbers))
+        rewards.append(0.2 if result.value is not None else -0.2)
     return rewards
 
 
@@ -32,8 +38,8 @@ def correctness_reward(completions, numbers=None, nums=None, **kwargs) -> list[f
     batch_numbers = numbers if numbers is not None else nums
     rewards = []
     for text, item_numbers in zip(completions, batch_numbers):
-        result = verify_expression(extract_answer(text), _normalize_numbers(item_numbers))
-        rewards.append(8.0 if result.ok else 0.0)
+        result = verify_expression(extract_answer(_completion_text(text)), _normalize_numbers(item_numbers))
+        rewards.append(2.0 if result.ok else 0.0)
     return rewards
 
 
@@ -42,10 +48,10 @@ def proximity_reward(completions, numbers=None, nums=None, **kwargs) -> list[flo
     batch_numbers = numbers if numbers is not None else nums
     rewards = []
     for text, item_numbers in zip(completions, batch_numbers):
-        result = verify_expression(extract_answer(text), _normalize_numbers(item_numbers))
+        result = verify_expression(extract_answer(_completion_text(text)), _normalize_numbers(item_numbers))
         if result.value is None:
             rewards.append(0.0)
             continue
         distance = abs(float(result.value) - 24.0)
-        rewards.append(0.1 * math.exp(-distance / 6.0))
+        rewards.append(0.05 * math.exp(-distance / 6.0))
     return rewards

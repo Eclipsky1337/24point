@@ -63,7 +63,7 @@ def test_strict_format_reward_rejects_extra_text() -> None:
         "<think>check</think><answer>(6-2)*(3+3)</answer>",
         "<think>check</think>extra<answer>(6-2)*(3+3)</answer> trailing",
     ]
-    assert answer_format_reward(completions) == [0.5, -1.0]
+    assert answer_format_reward(completions) == [0.1, -0.1]
 
 
 def test_correct_reward_dominates_valid_wrong_expression() -> None:
@@ -75,4 +75,12 @@ def test_correct_reward_dominates_valid_wrong_expression() -> None:
     valid_rewards = valid_expression_reward(completions, numbers=numbers)
     correct_rewards = correctness_reward(completions, numbers=numbers)
     assert valid_rewards == [0.2, 0.2]
-    assert correct_rewards == [8.0, 0.0]
+    assert correct_rewards == [2.0, 0.0]
+
+
+def test_rewards_accept_conversational_completions() -> None:
+    completions = [[{"role": "assistant", "content": "<think>check</think><answer>(6-2)*(3+3)</answer>"}]]
+    numbers = [[6, 2, 3, 3]]
+    assert answer_format_reward(completions) == [0.1]
+    assert valid_expression_reward(completions, numbers=numbers) == [0.2]
+    assert correctness_reward(completions, numbers=numbers) == [2.0]

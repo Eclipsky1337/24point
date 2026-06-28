@@ -91,19 +91,27 @@ python scripts/evaluate.py \
 
 已记录的 base hard split 结果：`success_rate=0.060`、`valid_rate=0.950`、`think_rate=1.000`。
 
-启动 GRPO v1 训练。当前服务器是 V100；fp16 在采样阶段出现过 NaN 概率，因此 v1 使用 fp32 + LoRA，小 `num_generations` 保持稳定：
+GRPO v1 使用 fp32 + LoRA、`num_generations=2`、300 steps，hard split 结果未超过 base：`success_rate=0.050`、`valid_rate=0.970`、`think_rate=1.000`。
+
+GRPO v2 参照 requirement 中的 GRPO/RLVR 方向和 `24-game-grpo` 参考实现，做三点修正：
+
+- 训练 prompt 默认转成 TRL conversational 格式，让训练和评测都使用 Qwen chat template。
+- reward 使用温和层级权重：format `+0.1/-0.1`，valid expression `+0.2/-0.2`，proximity 最高 `+0.05`，correct `+2.0`。
+- 提高探索：`num_generations=4`，`max_completion_length=192`，训练 500 steps。
+
+启动 GRPO v2：
 
 ```bash
 python scripts/train_grpo.py \
   --model_name /home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct \
   --train_file data/processed/train_nlile_solvable.jsonl \
-  --output_dir outputs/qwen2.5-1.5b-24point-grpo-v1 \
-  --max_steps 300 \
+  --output_dir outputs/qwen2.5-1.5b-24point-grpo-v2 \
+  --max_steps 500 \
   --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 2 \
-  --num_generations 2 \
-  --max_completion_length 128 \
-  --learning_rate 5e-6 \
+  --gradient_accumulation_steps 4 \
+  --num_generations 4 \
+  --max_completion_length 192 \
+  --learning_rate 1e-6 \
   --use_peft \
   --lora_r 16 \
   --lora_alpha 32 \
@@ -171,26 +179,26 @@ accelerate launch scripts/train_grpo.py \
 
 ```bash
 python scripts/evaluate.py \
-  --model_path outputs/qwen2.5-1.5b-24point-grpo-v1 \
+  --model_path outputs/qwen2.5-1.5b-24point-grpo-v2 \
   --eval_file data/processed/eval_game_of_24_hard.jsonl \
   --limit 100 \
   --max_new_tokens 128 \
   --num_samples 1 \
   --dtype float32 \
   --device cuda \
-  --record_file outputs/grpo_v1_hard_eval.jsonl \
-  --experiment grpo_v1_hard
+  --record_file outputs/grpo_v2_hard_eval.jsonl \
+  --experiment grpo_v2_hard
 ```
 
 使用本地 hard split 做 best-of-N 评测：
 
 ```bash
 python scripts/evaluate.py \
-  --model_path outputs/qwen2.5-1.5b-24point-grpo-v1 \
+  --model_path outputs/qwen2.5-1.5b-24point-grpo-v2 \
   --eval_file data/processed/eval_game_of_24_hard.jsonl \
   --limit 100 \
   --num_samples 8 \
-  --max_new_tokens 128
+  --max_new_tokens 192
 ```
 
 如果训练阶段再次遇到 Hugging Face dataset cache 报错，确认先执行过 `scripts/prepare_data.py`，并在训练命令里保留 `--train_file data/processed/train_nlile_solvable.jsonl`。这样训练会直接读取本地 JSONL，不再重新解析远端数据集缓存。
