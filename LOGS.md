@@ -1,5 +1,31 @@
 # Work Log
 
+## 2026-06-28 16:02 +08:00 - Retrying Hugging Face Dataset Download With Mirror
+
+- User requested retrying Hugging Face dataset download with `HF_ENDPOINT=https://hf-mirror.com`.
+- Read `/home/wuyan/study/nlp/final/AGENTS.md` and this log before acting.
+- Local `24point/` working tree is clean.
+- Server `24point/` still has generated fallback artifacts from the earlier HF outage:
+  - `scripts/build_offline_eval_data.py`
+  - `data/processed/eval_game_of_24_hard_fallback.jsonl`
+  - `data/processed/eval_generated_solvable_proxy.jsonl`
+  - `data/processed/eval_generated_unsolvable.jsonl`
+  - `outputs/base_eval_records.jsonl`
+- Next action: remove those fallback/proxy artifacts on the server and run `scripts/prepare_data.py` with the HF mirror endpoint to rebuild official dataset-backed splits.
+- Removed stale server fallback artifacts:
+  - `scripts/build_offline_eval_data.py`
+  - `data/processed/eval_game_of_24_hard_fallback.jsonl`
+  - `data/processed/eval_generated_solvable_proxy.jsonl`
+  - `data/processed/eval_generated_unsolvable.jsonl`
+  - `outputs/base_eval_records.jsonl`
+- Ran `HF_ENDPOINT=https://hf-mirror.com python scripts/prepare_data.py --out-dir data/processed --force-download` on the server.
+- Hugging Face mirror download succeeded.
+- Rebuilt official dataset files on the server:
+  - `data/processed/train_nlile_solvable.jsonl`: 1362 rows from `nlile/24-game`
+  - `data/processed/eval_game_of_24_hard.jsonl`: 100 rows from `test-time-compute/game-of-24` hard slice
+  - `data/processed/eval_nlile_unsolvable.jsonl`: 458 unsolvable rows from `nlile/24-game`
+- Confirmed old proxy filenames are no longer present on the server.
+
 ## 2026-06-28 14:37 +08:00 - Initial Inspection Before Base Evaluation
 
 - Read the project guidance from `/home/wuyan/study/nlp/final/AGENTS.md` supplied in the conversation.
