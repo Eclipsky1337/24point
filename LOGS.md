@@ -35,6 +35,21 @@
 - GPU was idle after completion.
 - No post-training evaluation has been run yet.
 
+## 2026-06-28 17:15 +08:00 - GRPO v1 Hard Eval And Local Referer Inspection
+
+- Evaluated GRPO v1 on the 100-sample HF-backed hard split:
+  - model path: `outputs/qwen2.5-1.5b-24point-grpo-v1`
+  - eval file: `data/processed/eval_game_of_24_hard.jsonl`
+  - record file: `outputs/grpo_v1_hard_eval_20260628.jsonl`
+  - settings: greedy `num_samples=1`, `max_new_tokens=128`, `dtype=float32`, `device=cuda`
+  - metrics: `success_rate=0.050`, `valid_rate=0.970`, `think_rate=1.000`
+- Started unsolvable evaluation, then stopped it when user asked to stop and inspect `24point-referer`.
+- Verified no server evaluator/GPU process remained after stopping the unsolvable run.
+- Inspected local `/home/wuyan/study/nlp/final/24point-referer`.
+  - No committed `outputs/`, `runs/`, `results/`, `data/processed/`, JSONL records, logs, metrics, checkpoints, or adapter files are present locally.
+  - Git history shows workflow commits for SFT warmup, best-of-N evaluation, reward strengthening, and merging SFT adapters before GRPO, but no stored success-rate artifact.
+  - README documents an SFT warmup then merged-SFT-to-GRPO path and best-of-N evaluation, but does not report numeric results.
+
 ## 2026-06-28 15:57 +08:00 - Base Model Hard-Split Evaluation On HF Data
 
 - User requested baseline testing on HF-backed data and corrected scope to the 100 hard evaluation samples only.
