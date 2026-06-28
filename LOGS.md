@@ -51,3 +51,12 @@
 - A subsequent GPU run produced repeated `!` tokens for the first 15 examples. Comparing against `24-game-grpo` showed the target evaluator was not applying the tokenizer chat template.
 - Stopped that partial run before it completed or appended an experiment record.
 - Updated `scripts/evaluate.py` to apply `tokenizer.apply_chat_template(..., add_generation_prompt=True)` when available and to set `pad_token=eos_token` when needed.
+
+## 2026-06-28 15:19 +08:00 - fp32 Evaluation Smoke Check
+
+- User suggested using fp32 to avoid repeated `!` outputs.
+- Synced the chat-template evaluator fix to the server.
+- Ran a 5-example hard-split smoke evaluation with `--dtype float32 --device cuda --max_new_tokens 128`.
+- Result: no repeated `!` outputs; all five completions had `<think>`/`<answer>` structure and valid arithmetic expressions, but none solved the examples.
+- Smoke metrics: `valid_rate=1.000`, `success_rate=0.000`, `think_rate=1.000`.
+- Next step is to run the 100-example base evaluations with fp32.
