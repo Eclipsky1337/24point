@@ -40,3 +40,11 @@
   - in-distribution is only a generated solvable proxy while HF access is blocked, not a true `nlile/24-game` sample.
 - Direct Hugging Face model access for `Qwen/Qwen2.5-1.5B-Instruct` timed out on a small `config.json` probe.
 - Installed `modelscope` on the server and started downloading `Qwen/Qwen2.5-1.5B-Instruct` from ModelScope to `/home/ma-user/work/models`.
+
+## 2026-06-28 15:07 +08:00 - Evaluation Runtime Fix
+
+- ModelScope download completed at `/home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct`.
+- First hard evaluation attempt failed before generation because `transformers` imported an incompatible server `torchvision==0.13.1+cu113`; removed `torchvision` on the server to unblock text-only Qwen loading.
+- Second hard evaluation attempt loaded the model but ran CPU-bound with 0 MiB GPU memory, making the full evaluation impractical.
+- Stopped that CPU-bound process before completion.
+- Updated `scripts/evaluate.py` to resolve `--device auto` to CUDA when available, explicitly move the model to that device, record the resolved device, and flush per-example output.

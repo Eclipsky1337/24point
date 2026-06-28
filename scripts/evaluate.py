@@ -30,6 +30,14 @@ def resolve_dtype(dtype: str):
     return None
 
 
+def resolve_device(device: str) -> str:
+    if device == "auto":
+        return "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("--device cuda requested, but CUDA is not available")
+    return device
+
+
 def generate(model, tokenizer, prompt: str, max_new_tokens: int, num_samples: int, temperature: float) -> list[str]:
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     generation_kwargs = {
@@ -58,6 +66,7 @@ def main() -> None:
     parser.add_argument("--num_samples", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--dtype", choices=["float32", "float16", "bfloat16", "auto"], default="float32")
+    parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
     parser.add_argument("--record_file", default=None, help="Append a JSONL experiment record to this path.")
     parser.add_argument("--experiment", default=None, help="Experiment name stored in --record_file.")
     args = parser.parse_args()
@@ -74,12 +83,13 @@ def main() -> None:
         dataset = load_game_of_24(mode="hard", limit=args.limit)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
+    device = resolve_device(args.device)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         torch_dtype=resolve_dtype(args.dtype),
-        device_map="auto",
         trust_remote_code=True,
     )
+    model.to(device)
     model.eval()
 
     correct = 0
@@ -133,7 +143,8 @@ def main() -> None:
         )
         print(
             f"[{idx}] nums={row['numbers']} answer={best_record['answer']!r} "
-            f"ok={best_record['ok']} reason={best_record['reason']} samples={args.num_samples}"
+            f"ok={best_record['ok']} reason={best_record['reason']} samples={args.num_samples}",
+            flush=True,
         )
 
     total = max(len(dataset), 1)
@@ -172,6 +183,7 @@ def main() -> None:
                 "max_new_tokens": args.max_new_tokens,
                 "temperature": args.temperature,
                 "dtype": args.dtype,
+                "device": device,
             },
             "environment": {
                 "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
