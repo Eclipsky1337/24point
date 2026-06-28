@@ -91,7 +91,7 @@ python scripts/evaluate.py \
 
 已记录的 base hard split 结果：`success_rate=0.060`、`valid_rate=0.950`、`think_rate=1.000`。
 
-启动 GRPO v1 训练。当前服务器是 V100，使用 fp16 + LoRA + gradient checkpointing：
+启动 GRPO v1 训练。当前服务器是 V100；fp16 在采样阶段出现过 NaN 概率，因此 v1 使用 fp32 + LoRA，小 `num_generations` 保持稳定：
 
 ```bash
 python scripts/train_grpo.py \
@@ -100,15 +100,13 @@ python scripts/train_grpo.py \
   --output_dir outputs/qwen2.5-1.5b-24point-grpo-v1 \
   --max_steps 300 \
   --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 4 \
-  --num_generations 4 \
+  --gradient_accumulation_steps 2 \
+  --num_generations 2 \
   --max_completion_length 128 \
   --learning_rate 5e-6 \
-  --fp16 \
   --use_peft \
   --lora_r 16 \
   --lora_alpha 32 \
-  --gradient_checkpointing \
   --report_to none
 ```
 
