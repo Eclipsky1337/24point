@@ -55,28 +55,66 @@ python -m pytest -q
 python scripts/prepare_data.py --train-limit 8 --eval-limit 8 --out-dir data/processed
 ```
 
-如果 Hugging Face 数据集缓存报 `TypeError: must be called with a dataclass type or instance`，说明缓存版本不兼容，强制重新下载：
+正式训练前准备完整数据。国内/云端访问 Hugging Face 不稳定时使用镜像源：
 
 ```bash
-python scripts/prepare_data.py --out-dir data/processed --force-download
+HF_ENDPOINT=https://hf-mirror.com python scripts/prepare_data.py \
+  --out-dir data/processed \
+  --force-download
 ```
 
-启动 GRPO 训练：
+当前数据产物：
+
+- `data/processed/train_nlile_solvable.jsonl`：`nlile/24-game` 可解训练样本。
+- `data/processed/eval_game_of_24_hard.jsonl`：`test-time-compute/game-of-24` hard slice，indices 900-1000，共 100 题。
+- `data/processed/eval_nlile_unsolvable.jsonl`：`nlile/24-game` 不可解样本，用于 false-positive 检查。
+
+如果 Hugging Face 数据集缓存报 `TypeError: must be called with a dataclass type or instance`，说明缓存版本不兼容，保留 `--force-download` 强制重新下载。
+
+## 当前实验流程
+
+先跑 base model hard split 基线，记录每题输出：
 
 ```bash
-accelerate launch scripts/train_grpo.py \
-  --model_name Qwen/Qwen2.5-1.5B-Instruct \
+python scripts/evaluate.py \
+  --model_path /home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct \
+  --eval_file data/processed/eval_game_of_24_hard.jsonl \
+  --limit 100 \
+  --max_new_tokens 128 \
+  --num_samples 1 \
+  --temperature 0.8 \
+  --dtype float32 \
+  --device cuda \
+  --record_file outputs/baseline_hard_hfdata_20260628.jsonl \
+  --experiment base_qwen25_15b_hf_hard
+```
+
+已记录的 base hard split 结果：`success_rate=0.060`、`valid_rate=0.950`、`think_rate=1.000`。
+
+启动 GRPO v1 训练。当前服务器是 V100，使用 fp16 + LoRA + gradient checkpointing：
+
+```bash
+python scripts/train_grpo.py \
+  --model_name /home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct \
   --train_file data/processed/train_nlile_solvable.jsonl \
-  --output_dir outputs/qwen2.5-1.5b-24point-grpo \
-  --max_steps 800 \
+  --output_dir outputs/qwen2.5-1.5b-24point-grpo-v1 \
+  --max_steps 300 \
   --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 8 \
+  --gradient_accumulation_steps 4 \
   --num_generations 4 \
+  --max_completion_length 128 \
   --learning_rate 5e-6 \
-  --bf16
+  --fp16 \
+  --use_peft \
+  --lora_r 16 \
+  --lora_alpha 32 \
+  --gradient_checkpointing \
+  --report_to none
 ```
 
-如果纯 GRPO 训练长期出现 `loss: 0.0`、`grad_norm: nan`、`kl: nan` 且正确率奖励一直为 0，先做 SFT warmup：
+按项目要求，默认只优化 GRPO。不要启动 SFT，除非纯 GRPO 已经有明确失败证据且单独记录原因。
+
+如果纯 GRPO 训练长期出现 `loss: 0.0`、`grad_norm: nan`、`kl: nan` 且正确率奖励一直为 0，需要先记录失败证据；只有在明确批准后才单独做 SFT warmup：
 
 ```bash
 python scripts/build_sft_data.py --out-file data/processed/sft_train.jsonl
@@ -135,16 +173,22 @@ accelerate launch scripts/train_grpo.py \
 
 ```bash
 python scripts/evaluate.py \
-  --model_path outputs/qwen2.5-1.5b-24point-grpo \
-  --split hard \
-  --limit 100
+  --model_path outputs/qwen2.5-1.5b-24point-grpo-v1 \
+  --eval_file data/processed/eval_game_of_24_hard.jsonl \
+  --limit 100 \
+  --max_new_tokens 128 \
+  --num_samples 1 \
+  --dtype float32 \
+  --device cuda \
+  --record_file outputs/grpo_v1_hard_eval.jsonl \
+  --experiment grpo_v1_hard
 ```
 
 使用本地 hard split 做 best-of-N 评测：
 
 ```bash
 python scripts/evaluate.py \
-  --model_path outputs/qwen2.5-1.5b-24point-grpo-shaped \
+  --model_path outputs/qwen2.5-1.5b-24point-grpo-v1 \
   --eval_file data/processed/eval_game_of_24_hard.jsonl \
   --limit 100 \
   --num_samples 8 \
