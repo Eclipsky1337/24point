@@ -1,5 +1,20 @@
 # Work Log
 
+## 2026-06-28 15:57 +08:00 - Base Model Hard-Split Evaluation On HF Data
+
+- User requested baseline testing on HF-backed data and corrected scope to the 100 hard evaluation samples only.
+- I mistakenly started an evaluation on `data/processed/train_nlile_solvable.jsonl`; stopped it before any record was appended. No training-data baseline result was kept.
+- Ran the correct hard split evaluation on the `nlp` server:
+  - model: `/home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct`
+  - eval file: `data/processed/eval_game_of_24_hard.jsonl`
+  - command settings: `--limit 100 --max_new_tokens 128 --num_samples 1 --temperature 0.8 --dtype float32 --device cuda`
+  - record file: `outputs/baseline_hard_hfdata_20260628.jsonl`
+- Metrics on 100 hard samples from `test-time-compute/game-of-24` indices 900-1000:
+  - `success_rate=0.060`
+  - `valid_rate=0.950`
+  - `think_rate=1.000`
+- No GRPO training or reward iteration was started.
+
 ## 2026-06-28 15:43 +08:00 - Rebuilt Hugging Face Dataset Splits With Mirror
 
 - Re-read `/home/wuyan/study/nlp/final/AGENTS.md` and `24point/LOGS.md` before acting.
