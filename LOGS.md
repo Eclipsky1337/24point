@@ -60,3 +60,14 @@
 - Result: no repeated `!` outputs; all five completions had `<think>`/`<answer>` structure and valid arithmetic expressions, but none solved the examples.
 - Smoke metrics: `valid_rate=1.000`, `success_rate=0.000`, `think_rate=1.000`.
 - Next step is to run the 100-example base evaluations with fp32.
+
+## 2026-06-28 15:27 +08:00 - Base Model Evaluation Results
+
+- Ran base `Qwen/Qwen2.5-1.5B-Instruct` from `/home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct` on the server V100.
+- Generation settings for all full runs: greedy single sample (`num_samples=1`), `temperature=0.8` recorded but sampling disabled, `max_new_tokens=128`, `dtype=float32`, `device=cuda`.
+- Detailed per-example records were appended to `/home/ma-user/work/24point/outputs/base_eval_records.jsonl`.
+- Hard fallback split (`eval_game_of_24_hard_fallback.jsonl`, 100 rows from the reference processed hard list): `success_rate=0.060`, `valid_rate=0.950`, `think_rate=1.000`.
+- Generated solvable proxy split (`eval_generated_solvable_proxy.jsonl`, 100 rows): `success_rate=0.040`, `valid_rate=0.920`, `think_rate=1.000`.
+- Generated unsolvable split (`eval_generated_unsolvable.jsonl`, 100 rows): `success_rate=0.000`, `valid_rate=0.790`, `think_rate=1.000`, `unsolvable_valid_rate=0.790`, `unsolvable_success_rate=0.000`.
+- Because Hugging Face dataset access is blocked on the server, the in-distribution value is a generated solvable proxy rather than a true `nlile/24-game` evaluation.
+- No GRPO training or reward iteration has been started. Per project guidance, wait for explicit user confirmation before GRPO work.
