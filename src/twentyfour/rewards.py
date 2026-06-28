@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import math
+import re
 
-from .verifier import extract_answer, has_r1_format, verify_expression
+from .verifier import extract_answer, verify_expression
+
+
+STRICT_R1_RE = re.compile(r"^\s*<think>.*?</think>\s*<answer>.*?</answer>\s*$", re.I | re.S)
 
 
 def _normalize_numbers(value) -> list[int]:
@@ -12,7 +16,7 @@ def _normalize_numbers(value) -> list[int]:
 
 
 def answer_format_reward(completions, **kwargs) -> list[float]:
-    return [0.5 if has_r1_format(text) else -0.5 for text in completions]
+    return [0.5 if STRICT_R1_RE.fullmatch(text or "") else -1.0 for text in completions]
 
 
 def valid_expression_reward(completions, numbers=None, nums=None, **kwargs) -> list[float]:
@@ -20,7 +24,7 @@ def valid_expression_reward(completions, numbers=None, nums=None, **kwargs) -> l
     rewards = []
     for text, item_numbers in zip(completions, batch_numbers):
         result = verify_expression(extract_answer(text), _normalize_numbers(item_numbers))
-        rewards.append(1.0 if result.value is not None else -1.0)
+        rewards.append(0.2 if result.value is not None else -1.0)
     return rewards
 
 
@@ -29,7 +33,7 @@ def correctness_reward(completions, numbers=None, nums=None, **kwargs) -> list[f
     rewards = []
     for text, item_numbers in zip(completions, batch_numbers):
         result = verify_expression(extract_answer(text), _normalize_numbers(item_numbers))
-        rewards.append(5.0 if result.ok else 0.0)
+        rewards.append(8.0 if result.ok else 0.0)
     return rewards
 
 

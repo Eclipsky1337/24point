@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import torch
 from datasets import load_dataset, load_from_disk
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
@@ -59,9 +60,10 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    model_dtype = torch.float16 if args.fp16 else torch.bfloat16 if args.bf16 else None
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
-        torch_dtype="auto",
+        torch_dtype=model_dtype,
         trust_remote_code=True,
         device_map=None,
     )

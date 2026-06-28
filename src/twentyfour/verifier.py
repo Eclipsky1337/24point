@@ -27,6 +27,13 @@ def extract_answer(text: str) -> str:
     return (text or "").strip()
 
 
+def normalize_answer(expression: str) -> str:
+    expr = (expression or "").strip()
+    if expr.count("=") == 1:
+        expr = expr.split("=", maxsplit=1)[0].strip()
+    return expr
+
+
 def _eval_node(node: ast.AST) -> Fraction:
     if isinstance(node, ast.Expression):
         return _eval_node(node.body)
@@ -49,7 +56,7 @@ def _eval_node(node: ast.AST) -> Fraction:
 
 
 def verify_expression(expression: str, numbers: list[int], target: int = 24) -> VerificationResult:
-    expr = (expression or "").strip()
+    expr = normalize_answer(expression)
     if not expr:
         return VerificationResult(False, reason="empty expression", expression=expr)
     if not ALLOWED_CHARS_RE.fullmatch(expr):
@@ -83,4 +90,3 @@ def verify_completion(completion: str, numbers: list[int], target: int = 24) -> 
 def has_r1_format(text: str) -> bool:
     text = text or ""
     return bool(re.search(r"<think>.*?</think>.*?<answer>.*?</answer>", text, re.I | re.S))
-

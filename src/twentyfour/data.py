@@ -11,6 +11,22 @@ from .prompts import build_prompt
 NUMBER_RE = re.compile(r"\d+")
 
 
+def parse_bool(value: Any, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "1", "yes", "y"}:
+            return True
+        if normalized in {"false", "0", "no", "n"}:
+            return False
+    return bool(value)
+
+
 def parse_numbers(value: Any) -> list[int]:
     if isinstance(value, (list, tuple)):
         return [int(x) for x in value]
@@ -41,11 +57,11 @@ def normalize_24game_example(example: dict[str, Any]) -> dict[str, Any]:
         ["numbers", "nums", "cards", "input", "question", "problem", "Puzzles", "puzzles"],
     )
     numbers = parse_numbers(raw_numbers)
-    solvable = example.get("solvable", example.get("is_solvable", True))
+    solvable = parse_bool(example.get("solvable", example.get("is_solvable", True)))
     return {
         "numbers": numbers,
         "prompt": build_prompt(numbers),
-        "solvable": bool(solvable),
+        "solvable": solvable,
     }
 
 
@@ -56,7 +72,11 @@ def load_nlile_24game(
     download_mode: str | None = None,
 ) -> Dataset:
     dataset = load_dataset("nlile/24-game", split=split, download_mode=download_mode)
-    dataset = dataset.map(normalize_24game_example, remove_columns=dataset.column_names)
+    dataset = dataset.map(
+        normalize_24game_example,
+        remove_columns=dataset.column_names,
+        load_from_cache_file=False,
+    )
     if solvable_only:
         dataset = dataset.filter(lambda row: row["solvable"])
     if limit:
@@ -71,7 +91,11 @@ def load_game_of_24(
     download_mode: str | None = None,
 ) -> Dataset:
     dataset = load_dataset("test-time-compute/game-of-24", split=split, download_mode=download_mode)
-    dataset = dataset.map(normalize_24game_example, remove_columns=dataset.column_names)
+    dataset = dataset.map(
+        normalize_24game_example,
+        remove_columns=dataset.column_names,
+        load_from_cache_file=False,
+    )
     if mode == "hard":
         start, end = 900, min(1000, len(dataset))
         dataset = dataset.select(range(start, end))

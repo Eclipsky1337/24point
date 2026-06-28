@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import json
+import re
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
 
 import torch
 from datasets import load_dataset
@@ -8,6 +13,21 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from twentyfour.data import load_game_of_24, load_nlile_24game
 from twentyfour.verifier import extract_answer, verify_expression
+
+
+def extract_think(text: str) -> str | None:
+    match = re.search(r"<think>(.*?)</think>", text, flags=re.DOTALL)
+    return match.group(1).strip() if match else None
+
+
+def resolve_dtype(dtype: str):
+    if dtype == "float16":
+        return torch.float16
+    if dtype == "bfloat16":
+        return torch.bfloat16
+    if dtype == "auto":
+        return "auto"
+    return None
 
 
 def generate(model, tokenizer, prompt: str, max_new_tokens: int, num_samples: int, temperature: float) -> list[str]:
@@ -37,6 +57,9 @@ def main() -> None:
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--num_samples", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--dtype", choices=["float32", "float16", "bfloat16", "auto"], default="float32")
+    parser.add_argument("--record_file", default=None, help="Append a JSONL experiment record to this path.")
+    parser.add_argument("--experiment", default=None, help="Experiment name stored in --record_file.")
     args = parser.parse_args()
 
     if args.eval_file:
@@ -53,7 +76,7 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
-        torch_dtype="auto",
+        torch_dtype=resolve_dtype(args.dtype),
         device_map="auto",
         trust_remote_code=True,
     )
@@ -61,6 +84,8 @@ def main() -> None:
 
     correct = 0
     valid = 0
+    think_count = 0
+    per_item_records = []
     for idx, row in enumerate(dataset):
         completions = generate(
             model,
@@ -70,18 +95,96 @@ def main() -> None:
             args.num_samples,
             args.temperature,
         )
-        results = [verify_expression(extract_answer(text), row["numbers"]) for text in completions]
-        best = next((result for result in results if result.ok), results[0])
-        valid += int(any(result.value is not None for result in results))
-        correct += int(any(result.ok for result in results))
+        sample_records = []
+        for sample_idx, text in enumerate(completions):
+            answer = extract_answer(text)
+            result = verify_expression(answer, row["numbers"])
+            think = extract_think(text)
+            sample_records.append(
+                {
+                    "sample_idx": sample_idx,
+                    "completion": text,
+                    "think": think,
+                    "answer": answer,
+                    "expression": result.expression,
+                    "ok": result.ok,
+                    "reason": result.reason,
+                    "value": float(result.value) if result.value is not None else None,
+                    "value_exact": str(result.value) if result.value is not None else None,
+                }
+            )
+
+        best_record = next((record for record in sample_records if record["ok"]), sample_records[0])
+        valid += int(any(record["value"] is not None for record in sample_records))
+        correct += int(any(record["ok"] for record in sample_records))
+        think_count += int(any(record["think"] is not None for record in sample_records))
+        per_item_records.append(
+            {
+                "idx": idx,
+                "numbers": row["numbers"],
+                "solvable": row.get("solvable", True),
+                "best_sample_idx": best_record["sample_idx"],
+                "best_answer": best_record["answer"],
+                "best_expression": best_record["expression"],
+                "best_ok": best_record["ok"],
+                "best_reason": best_record["reason"],
+                "samples": sample_records,
+            }
+        )
         print(
-            f"[{idx}] nums={row['numbers']} answer={best.expression!r} "
-            f"ok={best.ok} reason={best.reason} samples={args.num_samples}"
+            f"[{idx}] nums={row['numbers']} answer={best_record['answer']!r} "
+            f"ok={best_record['ok']} reason={best_record['reason']} samples={args.num_samples}"
         )
 
     total = max(len(dataset), 1)
-    print(f"valid_rate={valid / total:.3f}")
-    print(f"success_rate={correct / total:.3f}")
+    metrics = {
+        "valid_rate": valid / total,
+        "success_rate": correct / total,
+        "think_rate": think_count / total,
+    }
+    unsolvable_total = sum(1 for record in per_item_records if not record["solvable"])
+    if unsolvable_total:
+        false_positive = sum(
+            1
+            for record in per_item_records
+            if not record["solvable"] and any(sample["value"] is not None for sample in record["samples"])
+        )
+        false_success = sum(1 for record in per_item_records if not record["solvable"] and record["best_ok"])
+        metrics["unsolvable_valid_rate"] = false_positive / unsolvable_total
+        metrics["unsolvable_success_rate"] = false_success / unsolvable_total
+    print(f"valid_rate={metrics['valid_rate']:.3f}")
+    print(f"success_rate={metrics['success_rate']:.3f}")
+    print(f"think_rate={metrics['think_rate']:.3f}")
+
+    if args.record_file:
+        record_path = Path(args.record_file)
+        record_path.parent.mkdir(parents=True, exist_ok=True)
+        record = {
+            "timestamp": datetime.now(timezone.utc).astimezone().isoformat(),
+            "experiment": args.experiment or Path(args.model_path).name,
+            "model_path": args.model_path,
+            "eval_file": args.eval_file,
+            "split": args.split,
+            "command": " ".join(sys.argv),
+            "settings": {
+                "limit": args.limit,
+                "num_samples": args.num_samples,
+                "max_new_tokens": args.max_new_tokens,
+                "temperature": args.temperature,
+                "dtype": args.dtype,
+            },
+            "environment": {
+                "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
+                "torch": torch.__version__,
+                "cuda": torch.version.cuda,
+                "bf16_supported": bool(torch.cuda.is_bf16_supported()) if torch.cuda.is_available() else False,
+            },
+            "results": per_item_records,
+            "metrics": metrics,
+        }
+        with record_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+        print(f"record_file={record_path}")
 
 
 if __name__ == "__main__":

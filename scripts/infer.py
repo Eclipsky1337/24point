@@ -9,6 +9,16 @@ from twentyfour.prompts import build_prompt
 from twentyfour.verifier import extract_answer, verify_expression
 
 
+def resolve_dtype(dtype: str):
+    if dtype == "float16":
+        return torch.float16
+    if dtype == "bfloat16":
+        return torch.bfloat16
+    if dtype == "auto":
+        return "auto"
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", required=True)
@@ -16,12 +26,13 @@ def main() -> None:
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--num_samples", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=0.8)
+    parser.add_argument("--dtype", choices=["float32", "float16", "bfloat16", "auto"], default="float32")
     args = parser.parse_args()
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
-        torch_dtype="auto",
+        torch_dtype=resolve_dtype(args.dtype),
         device_map="auto",
         trust_remote_code=True,
     )

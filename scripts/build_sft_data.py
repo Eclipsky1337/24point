@@ -29,7 +29,7 @@ def main() -> None:
             record = {
                 "numbers": row["numbers"],
                 "prompt": row["prompt"],
-                "completion": format_sft_completion(expression),
+                "completion": format_sft_completion(expression, row["numbers"]),
                 "expression": expression,
             }
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -40,4 +40,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
