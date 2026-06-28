@@ -19,6 +19,22 @@
   - settings: `max_steps=300`, `per_device_train_batch_size=1`, `gradient_accumulation_steps=2`, `num_generations=2`, `max_completion_length=128`, `learning_rate=5e-6`, LoRA r=16 alpha=32, fp32, `report_to=none`
 - Early log showed the run advancing past step 3/300 with about 12 GiB GPU memory in use.
 
+## 2026-06-28 17:06 +08:00 - GRPO v1 Training Completed
+
+- Checked the `nlp` server after user asked for status.
+- GRPO v1 completed all 300/300 steps.
+- Final output directory: `outputs/qwen2.5-1.5b-24point-grpo-v1`
+- Checkpoints written: `checkpoint-100`, `checkpoint-200`, `checkpoint-300`
+- Output directory size: about 767 MiB.
+- Final trainer summary:
+  - `train_runtime=3682.9296`
+  - `train_loss=0.08488216452300548`
+  - final logged `kl=3.0186611115932465`
+  - final logged `rewards/correctness_reward=0.0`
+  - recent logged correctness reward was sparse but nonzero in some intervals, including `0.8` at step 290.
+- GPU was idle after completion.
+- No post-training evaluation has been run yet.
+
 ## 2026-06-28 15:57 +08:00 - Base Model Hard-Split Evaluation On HF Data
 
 - User requested baseline testing on HF-backed data and corrected scope to the 100 hard evaluation samples only.
