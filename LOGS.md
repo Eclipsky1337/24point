@@ -1,5 +1,22 @@
 # Work Log
 
+## 2026-06-28 15:43 +08:00 - Rebuilt Hugging Face Dataset Splits With Mirror
+
+- Re-read `/home/wuyan/study/nlp/final/AGENTS.md` and `24point/LOGS.md` before acting.
+- On the `nlp` server, removed stale fallback/proxy artifacts if present:
+  - `scripts/build_offline_eval_data.py`
+  - `data/processed/eval_game_of_24_hard_fallback.jsonl`
+  - `data/processed/eval_generated_solvable_proxy.jsonl`
+  - `data/processed/eval_generated_unsolvable.jsonl`
+  - `outputs/base_eval_records.jsonl`
+- Ran `HF_ENDPOINT=https://hf-mirror.com python scripts/prepare_data.py --out-dir data/processed --force-download` in `/home/ma-user/work/24point`.
+- Hugging Face mirror download succeeded and rebuilt:
+  - `data/processed/train_nlile_solvable.jsonl`: 1362 rows
+  - `data/processed/eval_game_of_24_hard.jsonl`: 100 rows
+  - `data/processed/eval_nlile_unsolvable.jsonl`: 458 rows from `nlile/24-game`
+- Verified no proxy/fallback/generated-unsolvable artifact filenames remain on the server.
+- Server git status after this phase: intended deletion of `scripts/build_offline_eval_data.py`; unrelated untracked `src/twentyfour_grpo.egg-info/` remains from server installation.
+
 ## 2026-06-28 16:02 +08:00 - Retrying Hugging Face Dataset Download With Mirror
 
 - User requested retrying Hugging Face dataset download with `HF_ENDPOINT=https://hf-mirror.com`.
