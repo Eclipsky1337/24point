@@ -28,3 +28,15 @@
 - Installed/import-checked `datasets==2.21.0`, `transformers==4.46.3`, `accelerate==1.2.1`, `pytest==9.1.1`, `safetensors==0.8.0`, and `sentencepiece==0.2.1` on the server.
 - Server-side verification passed with `python -m pytest -q`: 11 tests passed.
 - No local tests or local evaluations were run after the user directed server-only execution.
+
+## 2026-06-28 15:00 +08:00 - Dataset And Model Access Decisions
+
+- Server-side Hugging Face dataset loading failed for `nlile/24-game` with `ProxyError`.
+- A direct Hugging Face rows API probe for `test-time-compute/game-of-24` also timed out through the server proxy.
+- No usable Hugging Face dataset cache was found on the server.
+- Added `scripts/build_offline_eval_data.py` as a server-runnable fallback:
+  - hard split uses the 100-number processed reference list from `24-game-grpo/data/processed/eval.jsonl`;
+  - unsolvable split is generated on the server from all 1-13 four-number combinations using the target solver;
+  - in-distribution is only a generated solvable proxy while HF access is blocked, not a true `nlile/24-game` sample.
+- Direct Hugging Face model access for `Qwen/Qwen2.5-1.5B-Instruct` timed out on a small `config.json` probe.
+- Installed `modelscope` on the server and started downloading `Qwen/Qwen2.5-1.5B-Instruct` from ModelScope to `/home/ma-user/work/models`.
