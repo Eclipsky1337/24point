@@ -48,3 +48,6 @@
 - Second hard evaluation attempt loaded the model but ran CPU-bound with 0 MiB GPU memory, making the full evaluation impractical.
 - Stopped that CPU-bound process before completion.
 - Updated `scripts/evaluate.py` to resolve `--device auto` to CUDA when available, explicitly move the model to that device, record the resolved device, and flush per-example output.
+- A subsequent GPU run produced repeated `!` tokens for the first 15 examples. Comparing against `24-game-grpo` showed the target evaluator was not applying the tokenizer chat template.
+- Stopped that partial run before it completed or appended an experiment record.
+- Updated `scripts/evaluate.py` to apply `tokenizer.apply_chat_template(..., add_generation_prompt=True)` when available and to set `pad_token=eos_token` when needed.

@@ -38,8 +38,21 @@ def resolve_device(device: str) -> str:
     return device
 
 
+def build_generation_prompt(prompt: str, tokenizer) -> str:
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+    except Exception:
+        return prompt
+
+
 def generate(model, tokenizer, prompt: str, max_new_tokens: int, num_samples: int, temperature: float) -> list[str]:
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    rendered_prompt = build_generation_prompt(prompt, tokenizer)
+    inputs = tokenizer(rendered_prompt, return_tensors="pt").to(model.device)
     generation_kwargs = {
         "max_new_tokens": max_new_tokens,
         "do_sample": num_samples > 1,
@@ -83,6 +96,8 @@ def main() -> None:
         dataset = load_game_of_24(mode="hard", limit=args.limit)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_path, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     device = resolve_device(args.device)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
