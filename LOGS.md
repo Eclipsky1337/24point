@@ -1,5 +1,24 @@
 # Work Log
 
+## 2026-06-28 16:14 +08:00 - Started GRPO v1 Training
+
+- User explicitly confirmed starting GRPO training after the base hard-split evaluation.
+- Per project guidance, updated `README.md` before training so it documents the current HF mirror data prep, hard baseline command, and GRPO v1 command.
+- Server tests passed before training: `python -m pytest -q` -> 11 passed.
+- First v1 attempt used fp16 LoRA and failed before step 1:
+  - log: `outputs/logs/grpo_v1_train_20260628.log`
+  - failure: `RuntimeError: probability tensor contains either inf, nan or element < 0`
+- Ran a one-step fp32 LoRA smoke test successfully:
+  - output dir: `outputs/qwen2.5-1.5b-24point-grpo-v1-smoke`
+  - settings: `max_steps=1`, `num_generations=2`, `gradient_accumulation_steps=2`, LoRA r=16 alpha=32, no fp16/bf16
+  - smoke metrics included `reward=-1.3978708982467651`, `rewards/correctness_reward=0.0`, `kl=0.0`
+- Started GRPO v1 as a background server job:
+  - process: `python scripts/train_grpo.py`, PID `153619`
+  - log: `outputs/logs/grpo_v1_train_20260628_fp32.log`
+  - output dir: `outputs/qwen2.5-1.5b-24point-grpo-v1`
+  - settings: `max_steps=300`, `per_device_train_batch_size=1`, `gradient_accumulation_steps=2`, `num_generations=2`, `max_completion_length=128`, `learning_rate=5e-6`, LoRA r=16 alpha=32, fp32, `report_to=none`
+- Early log showed the run advancing past step 3/300 with about 12 GiB GPU memory in use.
+
 ## 2026-06-28 15:57 +08:00 - Base Model Hard-Split Evaluation On HF Data
 
 - User requested baseline testing on HF-backed data and corrected scope to the 100 hard evaluation samples only.
