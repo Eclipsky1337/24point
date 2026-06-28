@@ -18,3 +18,13 @@
 - Confirmed `ssh nlp` works and lands in `/home/ma-user` on host `notebook-936bea3e-c862-4fca-8b53-e4d7f69b841d`.
 - Confirmed local git remote is `https://github.com/wuyan1345/24point` on branch `main`.
 - To follow the required local/server synchronization path, the current target repository state must be committed and pushed before server-side clone/pull and execution.
+
+## 2026-06-28 14:51 +08:00 - Server Environment Ready
+
+- Committed and pushed checkpoint `c552191` so the server can run the same repository state via git.
+- Cloned the repository to `/home/ma-user/work/24point` on `nlp`.
+- Server runtime: Python 3.10.6, Tesla V100-PCIE-32GB, NVIDIA driver 470.57.02, CUDA 11.4 reported by `nvidia-smi`.
+- Preserved the server's existing `torch==1.12.1+cu113`; an initial dependency install attempted to resolve a newer Torch, so I switched to no-dependency installation for the evaluation-critical packages.
+- Installed/import-checked `datasets==2.21.0`, `transformers==4.46.3`, `accelerate==1.2.1`, `pytest==9.1.1`, `safetensors==0.8.0`, and `sentencepiece==0.2.1` on the server.
+- Server-side verification passed with `python -m pytest -q`: 11 tests passed.
+- No local tests or local evaluations were run after the user directed server-only execution.
