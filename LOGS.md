@@ -50,6 +50,21 @@
   - Git history shows workflow commits for SFT warmup, best-of-N evaluation, reward strengthening, and merging SFT adapters before GRPO, but no stored success-rate artifact.
   - README documents an SFT warmup then merged-SFT-to-GRPO path and best-of-N evaluation, but does not report numeric results.
 
+## 2026-06-28 17:28 +08:00 - Requirement And Reference Implementation Review
+
+- Re-read `requirement.docx`.
+  - Assignment requires GRPO/RLVR on `Qwen/Qwen2.5-1.5B-Instruct`, R1-style `<think>/<answer>`, training on solvable `nlile/24-game`, testing on non-overlapping `test-time-compute/game-of-24`, especially indices 900-1000, plus unsolvable checks.
+  - Requirement cites DeepSeekMath GRPO, DeepSeek-R1 RLVR, Tree of Thoughts, TinyZero, Logic-RL, open-r1, and TRL GRPOTrainer.
+- Compared against local `24-game-grpo` reference.
+  - Reference uses `data/processed/eval.jsonl` matching the 100 hard examples.
+  - Reference evaluation reports `solve_rate`, `format_pass_rate`, `valid_expression_rate`, and `hallucination_rate`, and saves detailed JSON.
+  - Reference reward is simpler and less punitive: format weight 0.1, valid expression weight 0.2, correct weight 1.0.
+  - Reference GRPO config uses `num_generations=4`, `gradient_accumulation_steps=4`, one epoch, `max_completion_length=192`, `learning_rate=1e-6`, and full-model GRPO config path.
+- Compared v1 failure modes:
+  - v1 used `num_generations=2`, LoRA, 300 steps / about 0.44 epoch, fp32 for stability, and no SFT/cold start.
+  - v1 hard split `success_rate=0.050` vs base `0.060`, so v1 did not improve pass@1.
+  - Likely causes: sparse correctness reward, too-small generation group, insufficient training coverage, prompt/chat-template mismatch risk between training and evaluation, and hard split pass@1 evaluation.
+
 ## 2026-06-28 15:57 +08:00 - Base Model Hard-Split Evaluation On HF Data
 
 - User requested baseline testing on HF-backed data and corrected scope to the 100 hard evaluation samples only.
