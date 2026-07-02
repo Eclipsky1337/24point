@@ -65,11 +65,11 @@ log "Upgrading pip"
 "${PIP_CMD[@]}" install -U pip -i "$PIP_MIRROR"
 
 log "Uninstalling existing torch packages"
-"${PIP_CMD[@]}" uninstall -y torch torchvision torchaudio || true
+"${PIP_CMD[@]}" uninstall -y torch torchvision torchaudio 2>/dev/null || true
 
 if should_use_cu113; then
   log "Installing CUDA 11.3 Torch stack for older GPU drivers"
-  # 清华源不支持 cu113 的 extra-index，所以使用官方源并设置超时
+  # 清华源不支持 cu113 的 extra-index，使用官方源
   "${PIP_CMD[@]}" install \
     torch==1.12.1+cu113 \
     torchvision==0.13.1+cu113 \

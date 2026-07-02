@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import re
 
 from .verifier import extract_answer, verify_expression
@@ -22,16 +21,7 @@ def _completion_text(completion) -> str:
 
 
 def answer_format_reward(completions, **kwargs) -> list[float]:
-    return [0.05 if STRICT_R1_RE.fullmatch(_completion_text(text)) else -0.05 for text in completions]
-
-
-def valid_expression_reward(completions, numbers=None, nums=None, **kwargs) -> list[float]:
-    batch_numbers = numbers if numbers is not None else nums
-    rewards = []
-    for text, item_numbers in zip(completions, batch_numbers):
-        result = verify_expression(extract_answer(_completion_text(text)), _normalize_numbers(item_numbers))
-        rewards.append(0.2 if result.value is not None else -0.2)
-    return rewards
+    return [0.1 if STRICT_R1_RE.fullmatch(_completion_text(text)) else 0.0 for text in completions]
 
 
 def correctness_reward(completions, numbers=None, nums=None, **kwargs) -> list[float]:
@@ -39,19 +29,5 @@ def correctness_reward(completions, numbers=None, nums=None, **kwargs) -> list[f
     rewards = []
     for text, item_numbers in zip(completions, batch_numbers):
         result = verify_expression(extract_answer(_completion_text(text)), _normalize_numbers(item_numbers))
-        rewards.append(2.0 if result.ok else 0.0)
-    return rewards
-
-
-def proximity_reward(completions, numbers=None, nums=None, **kwargs) -> list[float]:
-    """Dense verifiable reward that increases as a valid expression approaches 24."""
-    batch_numbers = numbers if numbers is not None else nums
-    rewards = []
-    for text, item_numbers in zip(completions, batch_numbers):
-        result = verify_expression(extract_answer(_completion_text(text)), _normalize_numbers(item_numbers))
-        if result.value is None:
-            rewards.append(0.0)
-            continue
-        distance = abs(float(result.value) - 24.0)
-        rewards.append(0.02 * math.exp(-distance / 6.0))
+        rewards.append(1.0 if result.ok else 0.0)
     return rewards

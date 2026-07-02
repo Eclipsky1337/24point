@@ -73,7 +73,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_path", required=True)
     parser.add_argument("--eval_file", default=None, help="Optional local JSONL evaluation file.")
-    parser.add_argument("--split", choices=["id", "hard", "unsolvable"], default="hard")
+    parser.add_argument("--split", choices=["id", "nonhard", "hard", "unsolvable"], default="nonhard")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--max_new_tokens", type=int, default=256)
     parser.add_argument("--num_samples", type=int, default=1)
@@ -92,6 +92,8 @@ def main() -> None:
     elif args.split == "unsolvable":
         dataset = load_nlile_24game(solvable_only=False).filter(lambda row: not row["solvable"])
         dataset = dataset.select(range(min(args.limit, len(dataset))))
+    elif args.split == "nonhard":
+        dataset = load_game_of_24(mode="nonhard", limit=args.limit)
     else:
         dataset = load_game_of_24(mode="hard", limit=args.limit)
 

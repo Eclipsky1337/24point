@@ -65,20 +65,20 @@ HF_ENDPOINT=https://hf-mirror.com python scripts/prepare_data.py \
 
 当前数据产物：
 
-- `data/processed/train_nlile_solvable.jsonl`：`nlile/24-game` 可解训练样本。
-- `data/processed/eval_game_of_24_hard.jsonl`：`test-time-compute/game-of-24` hard slice，indices 900-1000，共 100 题。
+- `data/processed/train_nlile_all.jsonl`：`nlile/24-game` 全量训练样本。
+- `data/processed/eval_game_of_24_nonhard_100.jsonl`：`test-time-compute/game-of-24` 去掉 hard slice 后，固定随机种子抽取的 100 题。
 - `data/processed/eval_nlile_unsolvable.jsonl`：`nlile/24-game` 不可解样本，用于 false-positive 检查。
 
 如果 Hugging Face 数据集缓存报 `TypeError: must be called with a dataclass type or instance`，说明缓存版本不兼容，保留 `--force-download` 强制重新下载。
 
-## 当前实验流程
+## 训练链路
 
-先跑 base model hard split 基线，记录每题输出：
+先跑 base model 基线，记录每题输出：
 
 ```bash
 python scripts/evaluate.py \
   --model_path /home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct \
-  --eval_file data/processed/eval_game_of_24_hard.jsonl \
+  --eval_file data/processed/eval_game_of_24_nonhard_100.jsonl \
   --limit 100 \
   --max_new_tokens 128 \
   --num_samples 1 \
@@ -86,86 +86,47 @@ python scripts/evaluate.py \
   --dtype float32 \
   --device cuda \
   --record_file outputs/baseline_hard_hfdata_20260628.jsonl \
-  --experiment base_qwen25_15b_hf_hard
+  --experiment base_qwen25_15b_nonhard_100
 ```
 
-已记录的 base hard split 结果：`success_rate=0.060`、`valid_rate=0.950`、`think_rate=1.000`。
+基线结果以当前抽样出的非 hard 100 题评测为准。
 
-GRPO v1 使用 fp32 + LoRA、`num_generations=2`、300 steps，hard split 结果未超过 base：`success_rate=0.050`、`valid_rate=0.970`、`think_rate=1.000`。
+训练只保留一条 GRPO 链路，不再引入 SFT warmup 或 LoRA merge 作为默认流程。当前实现遵循 `reference.md` 的核心参数：
 
-GRPO v2 参照 requirement 中的 GRPO/RLVR 方向和 `24-game-grpo` 参考实现，做三点修正：
+- `learning_rate=5e-7`
+- `beta=0.001`
+- `num_generations=8`
+- `temperature=1.0`
+- `num_train_epochs=1`
+- `warmup_ratio=0.01`
+- `max_grad_norm=0.2`
+- `max_completion_length=1024`
 
-- 训练 prompt 默认转成 TRL conversational 格式，让训练和评测都使用 Qwen chat template。
-- reward 使用温和层级权重：format `+0.1/-0.1`，valid expression `+0.2/-0.2`，proximity 最高 `+0.05`，correct `+2.0`。
-- 提高探索：`num_generations=4`，`max_completion_length=192`，训练 500 steps。
+奖励函数也收敛为最简单的两项：
 
-启动 GRPO v2：
+- `answer_format_reward`：输出严格包含 `<think>...</think><answer>...</answer>` 时给 `+0.1`，否则 `0.0`
+- `correctness_reward`：`<answer>` 中表达式程序校验结果等于 24 时给 `+1.0`，否则 `0.0`
+
+启动 GRPO：
 
 ```bash
 python scripts/train_grpo.py \
   --model_name /home/ma-user/work/models/Qwen/Qwen2___5-1___5B-Instruct \
-  --train_file data/processed/train_nlile_solvable.jsonl \
-  --output_dir outputs/qwen2.5-1.5b-24point-grpo-v2 \
-  --max_steps 500 \
+  --train_file data/processed/train_nlile_all.jsonl \
+  --output_dir outputs/qwen2.5-1.5b-24point-grpo \
   --per_device_train_batch_size 1 \
   --gradient_accumulation_steps 4 \
-  --num_generations 4 \
-  --max_completion_length 192 \
-  --learning_rate 1e-6 \
+  --num_generations 8 \
+  --max_completion_length 1024 \
+  --learning_rate 5e-7 \
+  --beta 0.001 \
+  --temperature 1.0 \
+  --num_train_epochs 1 \
+  --warmup_ratio 0.01 \
+  --max_grad_norm 0.2 \
   --use_peft \
   --lora_r 16 \
   --lora_alpha 32 \
-  --report_to none
-```
-
-按项目要求，默认只优化 GRPO。不要启动 SFT，除非纯 GRPO 已经有明确失败证据且单独记录原因。
-
-如果纯 GRPO 训练长期出现 `loss: 0.0`、`grad_norm: nan`、`kl: nan` 且正确率奖励一直为 0，需要先记录失败证据；只有在明确批准后才单独做 SFT warmup：
-
-```bash
-python scripts/build_sft_data.py --out-file data/processed/sft_train.jsonl
-
-python scripts/train_sft.py \
-  --model_name models/Qwen2.5-1.5B-Instruct \
-  --train_file data/processed/sft_train.jsonl \
-  --output_dir outputs/qwen2.5-1.5b-24point-sft \
-  --num_train_epochs 1 \
-  --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 8 \
-  --learning_rate 2e-5 \
-  --use_peft \
-  --lora_r 8 \
-  --lora_alpha 16 \
-  --report_to none
-```
-
-P100 上 SFT 如果第一步出现 `Non-finite loss ... nan`，不要加 `--fp16`；用 fp32 做 SFT warmup 更稳。GRPO 阶段可以继续使用 `--fp16` 节省显存。
-
-SFT 使用 LoRA 时，先把 adapter 合并进基座模型，避免 GRPO 在未合并的 adapter 上再套一层 LoRA：
-
-```bash
-python scripts/merge_lora.py \
-  --adapter_path outputs/qwen2.5-1.5b-24point-sft \
-  --output_dir outputs/qwen2.5-1.5b-24point-sft-merged
-```
-
-然后把 GRPO 的 `--model_name` 改成合并后的 SFT 模型目录：
-
-```bash
-accelerate launch scripts/train_grpo.py \
-  --model_name outputs/qwen2.5-1.5b-24point-sft-merged \
-  --train_file data/processed/train_nlile_solvable.jsonl \
-  --output_dir outputs/qwen2.5-1.5b-24point-grpo \
-  --max_steps 800 \
-  --per_device_train_batch_size 1 \
-  --gradient_accumulation_steps 1 \
-  --num_generations 2 \
-  --max_completion_length 128 \
-  --learning_rate 5e-6 \
-  --fp16 \
-  --use_peft \
-  --lora_r 8 \
-  --lora_alpha 16 \
   --report_to none
 ```
 
@@ -179,29 +140,29 @@ accelerate launch scripts/train_grpo.py \
 
 ```bash
 python scripts/evaluate.py \
-  --model_path outputs/qwen2.5-1.5b-24point-grpo-v2 \
-  --eval_file data/processed/eval_game_of_24_hard.jsonl \
+  --model_path outputs/qwen2.5-1.5b-24point-grpo \
+  --eval_file data/processed/eval_game_of_24_nonhard_100.jsonl \
   --limit 100 \
   --max_new_tokens 128 \
   --num_samples 1 \
   --dtype float32 \
   --device cuda \
-  --record_file outputs/grpo_v2_hard_eval.jsonl \
-  --experiment grpo_v2_hard
+  --record_file outputs/grpo_nonhard_100_eval.jsonl \
+  --experiment grpo_nonhard_100
 ```
 
-使用本地 hard split 做 best-of-N 评测：
+使用本地非 hard 100 题做 best-of-N 评测：
 
 ```bash
 python scripts/evaluate.py \
-  --model_path outputs/qwen2.5-1.5b-24point-grpo-v2 \
-  --eval_file data/processed/eval_game_of_24_hard.jsonl \
+  --model_path outputs/qwen2.5-1.5b-24point-grpo \
+  --eval_file data/processed/eval_game_of_24_nonhard_100.jsonl \
   --limit 100 \
   --num_samples 8 \
-  --max_new_tokens 192
+  --max_new_tokens 1024
 ```
 
-如果训练阶段再次遇到 Hugging Face dataset cache 报错，确认先执行过 `scripts/prepare_data.py`，并在训练命令里保留 `--train_file data/processed/train_nlile_solvable.jsonl`。这样训练会直接读取本地 JSONL，不再重新解析远端数据集缓存。
+如果训练阶段再次遇到 Hugging Face dataset cache 报错，确认先执行过 `scripts/prepare_data.py`，并在训练命令里保留 `--train_file data/processed/train_nlile_all.jsonl`。这样训练会直接读取本地 JSONL，不再重新解析远端数据集缓存。
 
 ## 项目结构
 
@@ -222,9 +183,9 @@ tests/
 
 ## 数据集
 
-训练默认使用 `nlile/24-game` 中可解样本；评测使用：
+训练默认使用 `nlile/24-game` 全量样本；评测使用：
 
-- `test-time-compute/game-of-24`：尤其适合取论文常用 `indices 900-1000` 难题。
+- `test-time-compute/game-of-24`：去掉 `indices 900-1000` 的 hard 区间后，从其余样本中固定抽取 100 题。
 - `nlile/24-game` 中不可解样本：检查模型是否会瞎编。
 
 数据集会通过 Hugging Face `datasets` 在线下载。云服务器如果无法访问 Hugging Face，请先配置镜像源或提前缓存数据。
@@ -233,17 +194,13 @@ tests/
 
 训练脚本会记录可验证奖励：
 
-- `answer_format_reward`：是否包含合法 `<answer>` 标签。
-- `valid_expression_reward`：算式是否合法、数字是否刚好使用一次。
-- `proximity_reward`：合法算式的结果越接近 24，奖励越高。
-- `correct_reward`：算式是否等于 24。
-
-默认奖励采用分层权重：格式正确 `+0.5`、格式错误 `-0.5`；合法表达式 `+1`、非法表达式 `-1`；距离奖励最高 `+0.1`；精确等于 24 额外 `+5`。这样可避免 proximity reward 压过任务的精确目标。
+- `answer_format_reward`：是否严格满足 `<think>...</think><answer>...</answer>`，奖励 `0.1`。
+- `correctness_reward`：`<answer>` 中表达式是否程序校验为 24，奖励 `1.0`。
 
 定量分析建议报告：
 
 - in-distribution success rate。
-- hard split success rate。
+- non-hard sampled success rate。
 - unsolvable split false-positive rate。
 - 若启用 OOD，可加入 Countdown 任务扩展结果。
 

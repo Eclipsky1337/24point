@@ -89,6 +89,7 @@ def load_game_of_24(
     mode: str = "all",
     limit: int | None = None,
     download_mode: str | None = None,
+    sample_seed: int = 42,
 ) -> Dataset:
     dataset = load_dataset("test-time-compute/game-of-24", split=split, download_mode=download_mode)
     dataset = dataset.map(
@@ -99,6 +100,10 @@ def load_game_of_24(
     if mode == "hard":
         start, end = 900, min(1000, len(dataset))
         dataset = dataset.select(range(start, end))
+    elif mode == "nonhard":
+        end = min(900, len(dataset))
+        dataset = dataset.select(range(end))
+        dataset = dataset.shuffle(seed=sample_seed)
     elif mode == "tail":
         start = min(900, len(dataset))
         dataset = dataset.select(range(start, len(dataset)))

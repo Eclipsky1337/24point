@@ -34,8 +34,9 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", default="data/processed")
     parser.add_argument("--train-limit", type=int, default=None)
-    parser.add_argument("--eval-limit", type=int, default=None)
+    parser.add_argument("--eval-limit", type=int, default=100)
     parser.add_argument("--unsolvable-limit", type=int, default=None)
+    parser.add_argument("--eval-seed", type=int, default=42)
     parser.add_argument("--force-download", action="store_true", help="Redownload datasets instead of reusing HF cache.")
     args = parser.parse_args()
 
@@ -43,8 +44,13 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     download_mode = "force_redownload" if args.force_download else None
-    train = load_nlile_24game(limit=args.train_limit, download_mode=download_mode)
-    hard = load_game_of_24(mode="hard", limit=args.eval_limit, download_mode=download_mode)
+    train = load_nlile_24game(solvable_only=False, limit=args.train_limit, download_mode=download_mode)
+    eval_set = load_game_of_24(
+        mode="nonhard",
+        limit=args.eval_limit,
+        download_mode=download_mode,
+        sample_seed=args.eval_seed,
+    )
     unsolvable = load_nlile_24game(
         solvable_only=False,
         limit=None,
@@ -52,8 +58,8 @@ def main() -> None:
     ).filter(lambda row: not row["solvable"])
     if args.unsolvable_limit:
         unsolvable = unsolvable.select(range(min(args.unsolvable_limit, len(unsolvable))))
-    train.to_json(out_dir / "train_nlile_solvable.jsonl", orient="records", lines=True, force_ascii=False)
-    hard.to_json(out_dir / "eval_game_of_24_hard.jsonl", orient="records", lines=True, force_ascii=False)
+    train.to_json(out_dir / "train_nlile_all.jsonl", orient="records", lines=True, force_ascii=False)
+    eval_set.to_json(out_dir / "eval_game_of_24_nonhard_100.jsonl", orient="records", lines=True, force_ascii=False)
     unsolvable_path = out_dir / "eval_nlile_unsolvable.jsonl"
     if len(unsolvable):
         unsolvable.to_json(unsolvable_path, orient="records", lines=True, force_ascii=False)
@@ -61,8 +67,8 @@ def main() -> None:
     else:
         unsolvable_count = write_generated_unsolvable(unsolvable_path, args.unsolvable_limit)
 
-    print(f"train: {len(train)} rows -> {out_dir / 'train_nlile_solvable.jsonl'}")
-    print(f"hard eval: {len(hard)} rows -> {out_dir / 'eval_game_of_24_hard.jsonl'}")
+    print(f"train: {len(train)} rows -> {out_dir / 'train_nlile_all.jsonl'}")
+    print(f"eval: {len(eval_set)} rows -> {out_dir / 'eval_game_of_24_nonhard_100.jsonl'}")
     print(f"unsolvable eval: {unsolvable_count} rows -> {unsolvable_path}")
     if len(train):
         print(train[0]["prompt"])

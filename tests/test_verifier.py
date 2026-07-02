@@ -1,7 +1,7 @@
 from twentyfour.prompts import build_prompt
 from twentyfour.solver import format_sft_completion, solve_24_trace
 from twentyfour.verifier import extract_answer, has_r1_format, verify_completion, verify_expression
-from twentyfour.rewards import answer_format_reward, correctness_reward, proximity_reward, valid_expression_reward
+from twentyfour.rewards import answer_format_reward, correctness_reward
 
 
 def test_valid_expression() -> None:
@@ -52,35 +52,26 @@ def test_solve_24_trace_records_three_combine_steps() -> None:
     assert len(trace.steps) == 3
 
 
-def test_proximity_reward_prefers_closer_value() -> None:
-    completions = ["<answer>(8*(8-(3+3)))</answer>", "<answer>((8-3)*3+8)</answer>"]
-    rewards = proximity_reward(completions, numbers=[[3, 3, 8, 8], [3, 3, 8, 8]])
-    assert rewards[1] > rewards[0]
-
-
 def test_strict_format_reward_rejects_extra_text() -> None:
     completions = [
         "<think>check</think><answer>(6-2)*(3+3)</answer>",
         "<think>check</think>extra<answer>(6-2)*(3+3)</answer> trailing",
     ]
-    assert answer_format_reward(completions) == [0.05, -0.05]
+    assert answer_format_reward(completions) == [0.1, 0.0]
 
 
-def test_correct_reward_dominates_valid_wrong_expression() -> None:
+def test_correct_reward_only_rewards_exact_solution() -> None:
     completions = [
         "<think>check</think><answer>(6-2)*(3+3)</answer>",
         "<think>check</think><answer>(6+2)*(3+3)</answer>",
     ]
     numbers = [[6, 2, 3, 3], [6, 2, 3, 3]]
-    valid_rewards = valid_expression_reward(completions, numbers=numbers)
     correct_rewards = correctness_reward(completions, numbers=numbers)
-    assert valid_rewards == [0.2, 0.2]
-    assert correct_rewards == [2.0, 0.0]
+    assert correct_rewards == [1.0, 0.0]
 
 
 def test_rewards_accept_conversational_completions() -> None:
     completions = [[{"role": "assistant", "content": "<think>check</think><answer>(6-2)*(3+3)</answer>"}]]
     numbers = [[6, 2, 3, 3]]
-    assert answer_format_reward(completions) == [0.05]
-    assert valid_expression_reward(completions, numbers=numbers) == [0.2]
-    assert correctness_reward(completions, numbers=numbers) == [2.0]
+    assert answer_format_reward(completions) == [0.1]
+    assert correctness_reward(completions, numbers=numbers) == [1.0]

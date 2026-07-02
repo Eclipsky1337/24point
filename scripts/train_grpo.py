@@ -9,7 +9,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl import GRPOConfig, GRPOTrainer
 
 from twentyfour.data import load_nlile_24game
-from twentyfour.rewards import answer_format_reward, correctness_reward, proximity_reward, valid_expression_reward
+from twentyfour.rewards import answer_format_reward, correctness_reward
 
 
 def parse_args() -> argparse.Namespace:
@@ -18,22 +18,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dataset_path", default=None, help="Optional load_from_disk dataset path.")
     parser.add_argument(
         "--train_file",
-        default="data/processed/train_nlile_solvable.jsonl",
+        default="data/processed/train_nlile_all.jsonl",
         help="Local JSONL training file created by scripts/prepare_data.py.",
     )
     parser.add_argument("--output_dir", default="outputs/qwen2.5-1.5b-24point-grpo")
-    parser.add_argument("--max_steps", type=int, default=800)
-    parser.add_argument("--learning_rate", type=float, default=1e-6)
+    parser.add_argument("--max_steps", type=int, default=-1)
+    parser.add_argument("--num_train_epochs", type=float, default=1.0)
+    parser.add_argument("--learning_rate", type=float, default=5e-7)
     parser.add_argument("--per_device_train_batch_size", type=int, default=1)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=4)
     parser.add_argument("--num_generations", type=int, default=8)
     parser.add_argument("--max_prompt_length", type=int, default=256)
-    parser.add_argument("--max_completion_length", type=int, default=192)
-    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--max_completion_length", type=int, default=1024)
+    parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--top_k", type=int, default=0)
     parser.add_argument("--top_p", type=float, default=1.0)
     parser.add_argument("--repetition_penalty", type=float, default=1.0)
-    parser.add_argument("--beta", type=float, default=0.04)
+    parser.add_argument("--beta", type=float, default=0.001)
+    parser.add_argument("--warmup_ratio", type=float, default=0.01)
+    parser.add_argument("--max_grad_norm", type=float, default=0.2)
     parser.add_argument("--logging_steps", type=int, default=5)
     parser.add_argument("--save_steps", type=int, default=100)
     parser.add_argument("--train_limit", type=int, default=None)
@@ -118,6 +121,7 @@ def main() -> None:
         output_dir=args.output_dir,
         learning_rate=args.learning_rate,
         max_steps=args.max_steps,
+        num_train_epochs=args.num_train_epochs,
         per_device_train_batch_size=args.per_device_train_batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         num_generations=args.num_generations,
@@ -125,6 +129,8 @@ def main() -> None:
         max_completion_length=args.max_completion_length,
         temperature=args.temperature,
         beta=args.beta,
+        warmup_ratio=args.warmup_ratio,
+        max_grad_norm=args.max_grad_norm,
         logging_steps=args.logging_steps,
         save_steps=args.save_steps,
         bf16=args.bf16,
@@ -137,7 +143,7 @@ def main() -> None:
     trainer = GRPOTrainer(
         model=model,
         processing_class=tokenizer,
-        reward_funcs=[answer_format_reward, valid_expression_reward, proximity_reward, correctness_reward],
+        reward_funcs=[answer_format_reward, correctness_reward],
         args=training_args,
         train_dataset=dataset,
         peft_config=peft_config,
