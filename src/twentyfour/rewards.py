@@ -22,7 +22,7 @@ def _completion_text(completion) -> str:
 
 
 def answer_format_reward(completions, **kwargs) -> list[float]:
-    return [0.1 if STRICT_R1_RE.fullmatch(_completion_text(text)) else -0.1 for text in completions]
+    return [0.05 if STRICT_R1_RE.fullmatch(_completion_text(text)) else -0.05 for text in completions]
 
 
 def valid_expression_reward(completions, numbers=None, nums=None, **kwargs) -> list[float]:
@@ -53,5 +53,5 @@ def proximity_reward(completions, numbers=None, nums=None, **kwargs) -> list[flo
             rewards.append(0.0)
             continue
         distance = abs(float(result.value) - 24.0)
-        rewards.append(0.05 * math.exp(-distance / 6.0))
+        rewards.append(0.02 * math.exp(-distance / 6.0))
     return rewards

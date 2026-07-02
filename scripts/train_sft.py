@@ -26,6 +26,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora_r", type=int, default=8)
     parser.add_argument("--lora_alpha", type=int, default=16)
     parser.add_argument("--report_to", default="none")
+    parser.add_argument(
+        "--no_chat_template",
+        action="store_true",
+        help="Keep plain prompt+completion formatting instead of tokenizer chat templates.",
+    )
     return parser.parse_args()
 
 
@@ -59,11 +64,28 @@ def main() -> None:
     dataset = load_dataset("json", data_files=args.train_file, split="train")
 
     def tokenize(row):
-        prompt = row["prompt"].rstrip() + "\n"
+        prompt = row["prompt"].rstrip()
         completion = row["completion"]
-        prompt_ids = tokenizer(prompt, add_special_tokens=True)["input_ids"]
+        if args.no_chat_template:
+            prompt_text = prompt + "\n"
+            full_text = prompt_text + completion
+        else:
+            user_messages = [{"role": "user", "content": prompt}]
+            full_messages = user_messages + [{"role": "assistant", "content": completion}]
+            prompt_text = tokenizer.apply_chat_template(
+                user_messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+            full_text = tokenizer.apply_chat_template(
+                full_messages,
+                tokenize=False,
+                add_generation_prompt=False,
+            )
+
+        prompt_ids = tokenizer(prompt_text, add_special_tokens=True)["input_ids"]
         full = tokenizer(
-            prompt + completion,
+            full_text,
             max_length=args.max_length,
             truncation=True,
             padding="max_length",

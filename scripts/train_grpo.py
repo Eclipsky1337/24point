@@ -23,13 +23,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--output_dir", default="outputs/qwen2.5-1.5b-24point-grpo")
     parser.add_argument("--max_steps", type=int, default=800)
-    parser.add_argument("--learning_rate", type=float, default=5e-6)
+    parser.add_argument("--learning_rate", type=float, default=1e-6)
     parser.add_argument("--per_device_train_batch_size", type=int, default=1)
-    parser.add_argument("--gradient_accumulation_steps", type=int, default=8)
-    parser.add_argument("--num_generations", type=int, default=4)
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=4)
+    parser.add_argument("--num_generations", type=int, default=8)
     parser.add_argument("--max_prompt_length", type=int, default=256)
-    parser.add_argument("--max_completion_length", type=int, default=256)
-    parser.add_argument("--temperature", type=float, default=0.9)
+    parser.add_argument("--max_completion_length", type=int, default=192)
+    parser.add_argument("--temperature", type=float, default=0.7)
+    parser.add_argument("--top_k", type=int, default=0)
+    parser.add_argument("--top_p", type=float, default=1.0)
+    parser.add_argument("--repetition_penalty", type=float, default=1.0)
     parser.add_argument("--beta", type=float, default=0.04)
     parser.add_argument("--logging_steps", type=int, default=5)
     parser.add_argument("--save_steps", type=int, default=100)
@@ -41,6 +44,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
     parser.add_argument("--report_to", default="wandb")
+    parser.add_argument(
+        "--disable_safe_generation",
+        action="store_true",
+        help="Keep the model's original generation config instead of safer sampling defaults for older GPUs.",
+    )
     parser.add_argument(
         "--no_chat_template",
         action="store_true",
@@ -78,6 +86,15 @@ def main() -> None:
         trust_remote_code=True,
         device_map=None,
     )
+    if not args.disable_safe_generation:
+        # P100-era GPUs are prone to fp16 sampling instabilities with the model's
+        # default top-k/top-p config. Safer logits handling avoids generation NaNs.
+        model.generation_config.temperature = args.temperature
+        model.generation_config.top_k = args.top_k
+        model.generation_config.top_p = args.top_p
+        model.generation_config.repetition_penalty = args.repetition_penalty
+        model.generation_config.remove_invalid_values = True
+        model.generation_config.renormalize_logits = True
     if args.gradient_checkpointing:
         model.config.use_cache = False
         model.gradient_checkpointing_enable()
@@ -125,6 +142,12 @@ def main() -> None:
         train_dataset=dataset,
         peft_config=peft_config,
     )
+    if not args.disable_safe_generation and not training_args.use_vllm:
+        trainer.generation_config.top_k = args.top_k
+        trainer.generation_config.top_p = args.top_p
+        trainer.generation_config.repetition_penalty = args.repetition_penalty
+        trainer.generation_config.remove_invalid_values = True
+        trainer.generation_config.renormalize_logits = True
     trainer.train()
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
