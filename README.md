@@ -81,7 +81,7 @@ python scripts/evaluate.py \
   --eval_file data/processed/eval_game_of_24_nonhard_100.jsonl \
   --limit 100 \
   --max_new_tokens 128 \
-  --num_samples 1 \
+  --num_samples 8 \
   --temperature 0.8 \
   --dtype float32 \
   --device cuda \
@@ -89,7 +89,7 @@ python scripts/evaluate.py \
   --experiment base_qwen25_15b_nonhard_100
 ```
 
-基线结果以当前抽样出的非 hard 100 题评测为准。
+基线结果以当前抽样出的非 hard 100 题 `pass@8` 评测为准。
 
 训练只保留一条 GRPO 链路，不再引入 SFT warmup 或 LoRA merge 作为默认流程。当前实现遵循 `reference.md` 的核心参数：
 
@@ -144,14 +144,16 @@ python scripts/evaluate.py \
   --eval_file data/processed/eval_game_of_24_nonhard_100.jsonl \
   --limit 100 \
   --max_new_tokens 128 \
-  --num_samples 1 \
+  --num_samples 8 \
   --dtype float32 \
   --device cuda \
   --record_file outputs/grpo_nonhard_100_eval.jsonl \
   --experiment grpo_nonhard_100
 ```
 
-使用本地非 hard 100 题做 best-of-N 评测：
+默认测试指标使用 `pass@8`。
+
+使用本地非 hard 100 题做 `pass@8` 评测：
 
 ```bash
 python scripts/evaluate.py \
@@ -200,7 +202,7 @@ tests/
 定量分析建议报告：
 
 - in-distribution success rate。
-- non-hard sampled success rate。
+- non-hard sampled `pass@8`。
 - unsolvable split false-positive rate。
 - 若启用 OOD，可加入 Countdown 任务扩展结果。
 

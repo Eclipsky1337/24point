@@ -76,7 +76,7 @@ def main() -> None:
     parser.add_argument("--split", choices=["id", "nonhard", "hard", "unsolvable"], default="nonhard")
     parser.add_argument("--limit", type=int, default=100)
     parser.add_argument("--max_new_tokens", type=int, default=256)
-    parser.add_argument("--num_samples", type=int, default=1)
+    parser.add_argument("--num_samples", type=int, default=8)
     parser.add_argument("--temperature", type=float, default=0.8)
     parser.add_argument("--dtype", choices=["float32", "float16", "bfloat16", "auto"], default="float32")
     parser.add_argument("--device", choices=["auto", "cuda", "cpu"], default="auto")
@@ -165,9 +165,10 @@ def main() -> None:
         )
 
     total = max(len(dataset), 1)
+    success_metric_name = f"pass@{args.num_samples}"
     metrics = {
         "valid_rate": valid / total,
-        "success_rate": correct / total,
+        success_metric_name: correct / total,
         "think_rate": think_count / total,
     }
     unsolvable_total = sum(1 for record in per_item_records if not record["solvable"])
@@ -179,9 +180,9 @@ def main() -> None:
         )
         false_success = sum(1 for record in per_item_records if not record["solvable"] and record["best_ok"])
         metrics["unsolvable_valid_rate"] = false_positive / unsolvable_total
-        metrics["unsolvable_success_rate"] = false_success / unsolvable_total
+        metrics[f"unsolvable_{success_metric_name}"] = false_success / unsolvable_total
     print(f"valid_rate={metrics['valid_rate']:.3f}")
-    print(f"success_rate={metrics['success_rate']:.3f}")
+    print(f"{success_metric_name}={metrics[success_metric_name]:.3f}")
     print(f"think_rate={metrics['think_rate']:.3f}")
 
     if args.record_file:
